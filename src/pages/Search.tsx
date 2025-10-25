@@ -7,6 +7,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import {
   Search as SearchIcon,
@@ -15,9 +17,11 @@ import {
   Clock,
   Users,
   ArrowRight,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Info
+  Info,
+  ListOrdered
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -60,6 +64,10 @@ const BUSCAR_VIAJES_QUERY = `
 
 // Constante para la paginación
 const ITEMS_PER_PAGE = 10;
+
+//
+const token = localStorage.getItem('token');
+const pasajeroId = localStorage.getItem('pasajeroId');
 
 // --- Función de Petición GraphQL ---
 // Ahora la función recibe variables para la consulta
@@ -108,8 +116,14 @@ async function executeGraphQLQuery(query: string, variables: any = {}): Promise<
   throw new Error("Fallo la petición después de múltiples reintentos.");
 }
 
-// Componente de búsqueda de viajes
+// Componente principal (anteriormente solo búsqueda, ahora maneja vistas)
 const Search = () => {
+  // --- Lógica de Vistas (AÑADIDO) ---
+  const [view, setView] = useState<'search' | 'reservations'>('search');
+  const goToReservations = () => setView('reservations');
+  const goToSearch = () => setView('search');
+  // ------------------------------------
+
   const [searchData, setSearchData] = useState({
     origin: "",
     destination: "",
@@ -118,8 +132,11 @@ const Search = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [results, setResults] = useState<Viaje[]>([]);
-  const [isLoading, setIsLoading] = useState(false); 
+  const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // ESTADO NUEVO para controlar el cierre automático del Popover
+  const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
@@ -136,8 +153,8 @@ const Search = () => {
     if (!searchData.destination) newErrors.destination = "Ingresa Ciudad de Destino";
     if (!searchData.date) newErrors.date = "Ingresa Fecha";
     if (searchData.origin && searchData.destination && searchData.origin === searchData.destination) {
-        newErrors.destination = "Origen y destino no pueden ser iguales";
-        newErrors.origin = "Origen y destino no pueden ser iguales";
+      newErrors.destination = "Origen y destino no pueden ser iguales";
+      newErrors.origin = "Origen y destino no pueden ser iguales";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -154,7 +171,7 @@ const Search = () => {
 
     try {
       const fechaISO = format(searchData.date!, "yyyy-MM-dd");
-      
+
       // 3. Construir el objeto de variables dinámicamente
       const variables = {
         input: {
@@ -163,7 +180,7 @@ const Search = () => {
           fecha: fechaISO,
         },
       };
-      
+
       // 4. Ejecutar la consulta con la query parametrizada y las variables
       const data = await executeGraphQLQuery(BUSCAR_VIAJES_QUERY, variables);
 
@@ -176,12 +193,13 @@ const Search = () => {
         toast({
           title: "Búsqueda completada",
           description: `Se encontraron ${sortedViajes.length} opciones de viaje`,
+          // Nota: El tipo 'success' debe estar definido en tu hook 'use-toast'
         });
       } else {
-          toast({
-           title: "Sin resultados",
-           description: "No se encontraron viajes para los criterios seleccionados.",
-         });
+        toast({
+          title: "Sin resultados",
+          description: "No se encontraron viajes para los criterios seleccionados.",
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error de red o servidor desconocido.";
@@ -210,164 +228,184 @@ const Search = () => {
     return "Disponible";
   };
 
-  const handleReserve = (viajeId: string) => {
-    const viaje = results.find(v => v.id === viajeId);
-    if (viaje && viaje.cuposDisponibles > 0) {
-      toast({
-        title: "Redirigiendo a reserva",
-        description: `Reservando cupo en el viaje ${viaje.id}`,
-      });
-    }
-  };
+  // Función handleReserve ELIMINADA y reemplazada por Link en el JSX.
 
   const totalPages = Math.ceil(results.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentResults = results.slice(startIndex, endIndex);
 
+  // --- Renderizado Condicional de Vistas ---
+  const layoutTitle = 'Búsqueda de Reservas';
+  const navigate = useNavigate()
   return (
-    <Layout title="FleetGuard360" subtitle="Búsqueda de Reservas">
+    <Layout title="FleetGuard360" subtitle={layoutTitle}>
       <div className="max-w-6xl mx-auto space-y-8">
+
+        {/* Botón para Mis Reservas */}
+        <div className="flex justify-end p-2 -mt-4">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/mis-reservas')}
+            className="text-bus-primary hover:bg-bus-primary/10 font-semibold"
+            disabled={isLoading}
+        >
+            <ArrowRight className="h-4 w-4 mr-2" />
+            Mis reservas
+        </Button>
+
+        
+
+        </div>
+        {/* Fin Botón para Mis Reservas */}
+
         <Card className="shadow-card bg-gradient-card border-0">
           <CardHeader>
-             <CardTitle className="flex items-center gap-2 text-2xl">
-               <SearchIcon className="h-6 w-6 text-bus-primary" />
-               Buscar Viajes
-             </CardTitle>
-             <CardDescription>
-               Encuentra tu viaje perfecto seleccionando origen, destino y fecha
-             </CardDescription>
-           </CardHeader>
-           <CardContent>
-             <form onSubmit={handleSearch} className="grid md:grid-cols-4 gap-4 items-start" noValidate>
-               
-               {/* Ciudad de Origen (CORREGIDO) */}
-               <div className="space-y-2">
-                 <Label htmlFor="origin" className="flex items-center gap-1">
-                   <MapPin className="h-4 w-4 text-bus-primary" />
-                   Ciudad de Origen
-                 </Label>
-                 <Select 
-                   value={searchData.origin} 
-                   onValueChange={(value) => {
-                     setSearchData(prev => ({ ...prev, origin: value }));
-                     if (errors.origin) setErrors(prev => ({ ...prev, origin: "" }));
-                   }}
-                 >
-                   <SelectTrigger className={errors.origin ? "border-bus-danger focus:ring-bus-danger" : ""}>
-                      <SelectValue placeholder="Seleccionar origen" />
-                   </SelectTrigger>
-                   <SelectContent>
-                      {/* Filtra para no poder seleccionar el mismo destino */}
-                     {cities.filter(city => city !== searchData.destination).map((city) => (
-                       <SelectItem key={city} value={city}>{city}</SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-                 <div className="h-5">
-                   {errors.origin && <p className="text-sm text-bus-danger">{errors.origin}</p>}
-                 </div>
-               </div>
-               
-               {/* Ciudad de Destino (AÑADIDO) */}
-               <div className="space-y-2">
-                 <Label htmlFor="destination" className="flex items-center gap-1">
-                   <MapPin className="h-4 w-4 text-bus-primary" />
-                   Ciudad de Destino
-                 </Label>
-                 <Select 
-                   value={searchData.destination} 
-                   onValueChange={(value) => {
-                     setSearchData(prev => ({ ...prev, destination: value }));
-                     if (errors.destination) setErrors(prev => ({ ...prev, destination: "" }));
-                   }}
-                 >
-                   <SelectTrigger className={errors.destination ? "border-bus-danger focus:ring-bus-danger" : ""}>
-                      <SelectValue placeholder="Seleccionar destino" />
-                   </SelectTrigger>
-                   <SelectContent>
-                      {/* Filtra para no poder seleccionar el mismo origen */}
-                     {cities.filter(city => city !== searchData.origin).map((city) => (
-                       <SelectItem key={city} value={city}>{city}</SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-                 <div className="h-5">
-                   {errors.destination && <p className="text-sm text-bus-danger">{errors.destination}</p>}
-                 </div>
-               </div>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <SearchIcon className="h-6 w-6 text-bus-primary" />
+              Buscar Viajes
+            </CardTitle>
+            <CardDescription>
+              Encuentra tu viaje perfecto seleccionando origen, destino y fecha
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSearch} className="grid md:grid-cols-4 gap-4 items-start" noValidate>
 
-               {/* Date Picker */}
-                <div className="space-y-2">
-                    <Label className="flex items-center gap-1">
-                      <CalendarIcon className="h-4 w-4 text-bus-primary" />
-                      Fecha de Viaje
-                    </Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                         <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !searchData.date && "text-muted-foreground",
-                              errors.date && "border-bus-danger focus:ring-bus-danger"
-                            )}
-                         >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {searchData.date ? (
-                               format(searchData.date, "PPP", { locale: es })
-                            ) : (
-                               <span>Seleccionar fecha</span>
-                            )}
-                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                         <Calendar
-                            mode="single"
-                            selected={searchData.date}
-                            onSelect={(date) => {
-                               setSearchData(prev => ({ ...prev, date }));
-                               if (errors.date) setErrors(prev => ({ ...prev, date: "" }));
-                            }}
-                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                            initialFocus
-                            className="p-3 pointer-events-auto"
-                         />
-                      </PopoverContent>
-                    </Popover>
-                    <div className="h-5">
-                      {errors.date && <p className="text-sm text-bus-danger">{errors.date}</p>}
-                    </div>
+              {/* Ciudad de Origen (CORREGIDO) - El Select se cierra automáticamente */}
+              <div className="space-y-2">
+                <Label htmlFor="origin" className="flex items-center gap-1">
+                  <MapPin className="h-4 w-4 text-bus-primary" />
+                  Ciudad de Origen
+                </Label>
+                <Select
+                  value={searchData.origin}
+                  // El Select cierra automáticamente al seleccionar un Item.
+                  onValueChange={(value) => {
+                    setSearchData(prev => ({ ...prev, origin: value }));
+                    if (errors.origin) setErrors(prev => ({ ...prev, origin: "" }));
+                  }}
+                >
+                  <SelectTrigger className={errors.origin ? "border-bus-danger focus:ring-bus-danger" : ""}>
+                    <SelectValue placeholder="Seleccionar origen" />
+                  </SelectTrigger>
+                  {/* SelectContent abre hacia abajo por defecto */}
+                  <SelectContent>
+                    {/* Filtra para no poder seleccionar el mismo destino */}
+                    {cities.filter(city => city !== searchData.destination).map((city) => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="h-5">
+                  {errors.origin && <p className="text-sm text-bus-danger">{errors.origin}</p>}
                 </div>
+              </div>
 
-               {/* Submit Button */}
-               <div className="space-y-2">
-                 {/* La etiqueta vacía para alinear el botón con los inputs */}
-                 <Label className="opacity-0 select-none">Buscar</Label> 
-                 <Button
-                   type="submit"
-                   className="w-full bg-accent hover:bg-accent-hover text-accent-foreground shadow-button transition-smooth h-10"
-                   disabled={isLoading} 
-                 >
-                   {isLoading ? "Buscando..." : "Buscar"}
-                 </Button>
-                 <div className="h-5"></div>
-               </div>
-             </form>
-           </CardContent>
-          </Card>
+              {/* Ciudad de Destino (AÑADIDO) - El Select se cierra automáticamente */}
+              <div className="space-y-2">
+                <Label htmlFor="destination" className="flex items-center gap-1">
+                  <MapPin className="h-4 w-4 text-bus-primary" />
+                  Ciudad de Destino
+                </Label>
+                <Select
+                  value={searchData.destination}
+                  // El Select cierra automáticamente al seleccionar un Item.
+                  onValueChange={(value) => {
+                    setSearchData(prev => ({ ...prev, destination: value }));
+                    if (errors.destination) setErrors(prev => ({ ...prev, destination: "" }));
+                  }}
+                >
+                  <SelectTrigger className={errors.destination ? "border-bus-danger focus:ring-bus-danger" : ""}>
+                    <SelectValue placeholder="Seleccionar destino" />
+                  </SelectTrigger>
+                  {/* SelectContent abre hacia abajo por defecto */}
+                  <SelectContent>
+                    {/* Filtra para no poder seleccionar el mismo origen */}
+                    {cities.filter(city => city !== searchData.origin).map((city) => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="h-5">
+                  {errors.destination && <p className="text-sm text-bus-danger">{errors.destination}</p>}
+                </div>
+              </div>
+
+              {/* Date Picker (MODIFICADO para cierre automático) */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <CalendarIcon className="h-4 w-4 text-bus-primary" />
+                  Fecha de Viaje
+                </Label>
+                {/* Controlamos el estado del Popover con isDatePopoverOpen */}
+                <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !searchData.date && "text-muted-foreground",
+                        errors.date && "border-bus-danger focus:ring-bus-danger"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {searchData.date ? (
+                        format(searchData.date, "PPP", { locale: es })
+                      ) : (
+                        <span>Seleccionar fecha</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={searchData.date}
+                      onSelect={(date) => {
+                        setSearchData(prev => ({ ...prev, date }));
+                        if (errors.date) setErrors(prev => ({ ...prev, date: "" }));
+                        // CIERRE AUTOMÁTICO: Cerramos el popover al seleccionar una fecha
+                        setIsDatePopoverOpen(false);
+                      }}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <div className="h-5">
+                  {errors.date && <p className="text-sm text-bus-danger">{errors.date}</p>}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="space-y-2">
+                {/* La etiqueta vacía para alinear el botón con los inputs */}
+                <Label className="opacity-0 select-none">Buscar</Label>
+                <Button
+                  type="submit"
+                  className="w-full bg-accent hover:bg-accent-hover text-accent-foreground shadow-button transition-smooth h-10"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Buscando..." : "Buscar"}
+                </Button>
+                <div className="h-5"></div>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* Results Section */}
         {hasSearched && (
           <Card className="shadow-card bg-background/50 border-0">
             <CardHeader>
               <CardTitle className="text-xl">
-                  Resultados de Búsqueda
-                  {results.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {results.length} opciones
-                    </Badge>
-                  )}
+                Resultados de Búsqueda
+                {results.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {results.length} opciones
+                  </Badge>
+                )}
               </CardTitle>
               {searchData.origin && searchData.destination && searchData.date && (
                 <CardDescription>
@@ -376,7 +414,7 @@ const Search = () => {
               )}
             </CardHeader>
             <CardContent>
-              {isLoading ? ( 
+              {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="animate-pulse">
@@ -387,79 +425,86 @@ const Search = () => {
               ) : currentResults.length === 0 ? (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground text-lg">
-                      No se encontraron viajes para los criterios seleccionados
+                    No se encontraron viajes para los criterios seleccionados
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                      Intenta modificar tu búsqueda o selecciona otra fecha
+                    Intenta modificar tu búsqueda o selecciona otra fecha
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                   {currentResults.map((viaje) => (
-                      <Card key={viaje.id} className="shadow-card border hover:shadow-elegant transition-smooth">
-                         <CardContent className="p-6">
-                            <div className="grid md:grid-cols-4 gap-4 items-center">
-                              
-                              {/* Info Viaje (Cupos y Estado) */}
-                              <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                     <Badge 
-                                        className={cn(
-                                            "text-white border-0",
-                                            getAvailabilityColor(viaje.cuposDisponibles, viaje.cuposTotales)
-                                          )}
-                                      >
-                                         <Users className="h-3 w-3 mr-1" />
-                                         {viaje.cuposDisponibles}/{viaje.cuposTotales}
-                                      </Badge>
-                                      <span className="text-sm text-muted-foreground">
-                                         {getAvailabilityText(viaje.cuposDisponibles, viaje.cuposTotales)}
-                                      </span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                       <Info className="h-4 w-4" />
-                                       Estado: <span className="font-medium text-foreground">{viaje.estado}</span>
-                                  </div>
-                              </div>
+                  {currentResults.map((viaje) => (
+                    <Card key={viaje.id} className="shadow-card border hover:shadow-elegant transition-smooth">
+                      <CardContent className="p-6">
+                        <div className="grid md:grid-cols-4 gap-4 items-center">
 
-                              {/* Time */}
-                              <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                     <Clock className="h-4 w-4 text-muted-foreground" />
-                                     <span className="font-medium">{viaje.horaSalida}</span>
-                                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                     <span className="font-medium">{viaje.horaLlegada}</span>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                  </p>
-                              </div>
-
-                              {/* Locations */}
-                              <div className="space-y-1">
-                                  <p className="text-sm font-medium">Desde: {viaje.origen}</p>
-                                  <p className="text-sm text-muted-foreground">Hasta: {viaje.destino}</p>
-                              </div>
-                              
-                              {/* Reserve Button */}
-                              <div className="text-right">
-                                  <Button
-                                     onClick={() => handleReserve(viaje.id)}
-                                     disabled={viaje.cuposDisponibles === 0}
-                                     className={cn(
-                                        "w-full md:w-auto transition-smooth",
-                                        viaje.cuposDisponibles === 0
-                                            ? "bg-muted text-muted-foreground cursor-not-allowed"
-                                            : "bg-accent hover:bg-accent-hover text-accent-foreground shadow-button"
-                                      )}
-                                      aria-label={`Reservar viaje ${viaje.id}`}
-                                  >
-                                     {viaje.cuposDisponibles === 0 ? "Agotado" : "Reservar"}
-                                  </Button>
-                              </div>
+                          {/* Info Viaje (Cupos y Estado) */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                className={cn(
+                                  "text-white border-0",
+                                  getAvailabilityColor(viaje.cuposDisponibles, viaje.cuposTotales)
+                                )}
+                              >
+                                <Users className="h-3 w-3 mr-1" />
+                                {viaje.cuposDisponibles}/{viaje.cuposTotales}
+                              </Badge>
+                              <span className="text-sm text-muted-foreground">
+                                {getAvailabilityText(viaje.cuposDisponibles, viaje.cuposTotales)}
+                              </span>
                             </div>
-                         </CardContent>
-                      </Card>
-                    ))}
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Info className="h-4 w-4" />
+                              Estado: <span className="font-medium text-foreground">{viaje.estado}</span>
+                            </div>
+                          </div>
+
+                          {/* Time */}
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{viaje.horaSalida}</span>
+                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{viaje.horaLlegada}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                            </p>
+                          </div>
+
+                          {/* Locations */}
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">Desde: {viaje.origen}</p>
+                            <p className="text-sm text-muted-foreground">Hasta: {viaje.destino}</p>
+                          </div>
+
+                          {/* Reserve Button (MODIFICADO PARA USAR LINK) */}
+                          <div className="text-right">
+                            {viaje.cuposDisponibles === 0 ? (
+                              <Button
+                                disabled
+                                className="w-full md:w-auto transition-smooth bg-muted text-muted-foreground cursor-not-allowed"
+                                aria-label={`Viaje agotado`}
+                              >
+                                Agotado
+                              </Button>
+                            ) : (
+                              <Button
+                                asChild
+                                className="w-full md:w-auto transition-smooth bg-accent hover:bg-accent-hover text-accent-foreground shadow-button"
+                                aria-label={`Reservar viaje ${viaje.id}`}
+                              >
+                                <Link to={`/reservar?viajeId=${viaje.id}&viajeOrigen=${viaje.origen}&viajeDestino=${viaje.destino}&viajeCuposDisponibles=${viaje.cuposDisponibles}&viajeFecha=${viaje.fecha}&viajeHora=${viaje.horaSalida}`}>
+                                  Reservar
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
+                          {/* FIN MODIFICACIÓN */}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
 
@@ -468,7 +513,7 @@ const Search = () => {
                 <div className="flex items-center justify-between pt-6 mt-6 border-t">
                   <div>
                     <p className="text-sm text-muted-foreground">
-                        Página {currentPage} de {totalPages} (Mostrando {currentResults.length} de {results.length} viajes)
+                      Página {currentPage} de {totalPages} (Mostrando {currentResults.length} de {results.length} viajes)
                     </p>
                   </div>
                   <div className="flex gap-2">

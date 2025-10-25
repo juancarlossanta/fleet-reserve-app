@@ -9,6 +9,8 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Search from "./pages/Search";
 import NotFound from "./pages/NotFound";
+import MyReservations from "@/pages/MyReservations";
+import Reservar from "@/pages/Reservar";
 
 const queryClient = new QueryClient();
 
@@ -19,14 +21,18 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/search" element={<Search />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        
+        {/* 1. Rutas que NO usan LayoutAuth (Públicas/Auth) */}
+        <Route path="/" element={<Home />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/mis-reservas" element={<MyReservations />} />
+        <Route path="/reservar" element={<Reservar />} />
+        {/* Rutas sin Layout (Catch-all) */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

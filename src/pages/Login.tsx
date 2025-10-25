@@ -64,6 +64,7 @@ const Login = () => {
           success
           message
           token
+          pasajero {id nombre apellido}
         }
       }
     `;
@@ -95,9 +96,12 @@ const Login = () => {
       
       const loginData = result.data.login;
       
-      if (loginData.success && loginData.token) {
+      if (loginData.success && loginData.token && loginData.pasajero) {
         // Almacena el token para futuras peticiones autenticadas
         localStorage.setItem('authToken', loginData.token);
+        localStorage.setItem('pasajeroId',loginData.pasajero.id)
+        localStorage.setItem('pasajeroNombre',loginData.pasajero.nombre)
+        localStorage.setItem('pasajeroApellido',loginData.pasajero.apellido)
         
         toast({
           title: "¡Inicio de sesión exitoso! 🚀",
