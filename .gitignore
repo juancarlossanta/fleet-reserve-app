@@ -1,0 +1,21 @@
+# Directorios de dependencias
+node_modules/
+
+# Directorios de compilación/salida
+dist/
+build/
+out/
+.parcel-cache/ 
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.*.local
+
+# Archivos de logs
+npm-debug.log*
+yarn-error.log
+
+# Archivos generados por el sistema operativo
+.DS_Store
+Thumbs.db
