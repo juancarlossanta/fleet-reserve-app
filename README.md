@@ -1,3 +1,6 @@
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=juancarlossanta_fleet-reserve-app&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=juancarlossanta_fleet-reserve-app)
+
+
 # Welcome to your Lovable project
 
 ## Project info
